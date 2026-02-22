@@ -99,12 +99,6 @@ def fit_and_plot_cog_err_band(
     stat_err = np.sqrt(counts_raw) / total
 
     # -----------------------
-    # Total uncertainty
-    # -----------------------
-    ytop = np.sqrt(ytop_sys**2 + calib_pos**2 + stat_err**2)
-    ybot = np.sqrt(ybot_sys**2 + calib_neg**2 + stat_err**2)
-
-    # -----------------------
     # Gaussian fit (data)
     # -----------------------
     try:
@@ -116,8 +110,10 @@ def fit_and_plot_cog_err_band(
     except Exception:
         data_label = "Data (fit failed)"
 
-    ax.scatter(centers, counts, s=20, color=color, label=data_label)
-    ax.fill_between(centers, counts - ybot, counts + ytop,
+    # --- Plot statistical error bars for data ---
+    ax.errorbar(centers, counts, yerr=stat_err, fmt='o', color=color, markersize=4, capsize=2, label=data_label)
+    # --- Plot systematic band for data ---
+    ax.fill_between(centers, counts - ybot_sys - calib_neg, counts + ytop_sys + calib_pos,
                     color=color, alpha=0.3)
 
     # -----------------------
@@ -126,7 +122,7 @@ def fit_and_plot_cog_err_band(
     sim_counts_raw, _ = np.histogram(sim_vals, bins=bins, range=rng)
     sim_total = len(sim_vals)
     sim_counts = sim_counts_raw / sim_total
-    sim_err = np.sqrt(sim_counts_raw) / sim_total
+    sim_stat_err = np.sqrt(sim_counts_raw) / sim_total
 
     try:
         p0s = [sim_counts.max(), centers[np.argmax(sim_counts)], np.std(sim_vals)]
@@ -137,9 +133,9 @@ def fit_and_plot_cog_err_band(
     except Exception:
         sim_label = "Sim (fit failed)"
 
-    ax.scatter(centers, sim_counts, s=20, color=sim_color, label=sim_label)
-    ax.fill_between(centers, sim_counts - sim_err, sim_counts + sim_err,
-                    color=sim_color, alpha=0.3)
+    # --- Plot statistical error bars for simulation ---
+    ax.errorbar(centers, sim_counts, yerr=sim_stat_err, fmt='o', color=sim_color, markersize=4, capsize=2, label=sim_label)
+    # --- Simulation systematics not included (keep same as before) ---
 
 # -----------------------
 # Load and combine DATA

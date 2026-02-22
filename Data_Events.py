@@ -60,8 +60,8 @@ def add_energy_columns(df):
     for col in ["energy_GeV_full", "energy_GeV_avg"]:
         df.loc[df[col] < hit_threshold, col] = 0.0
 
-    df["energy_GeV_low"]  = 0.981 * df["energy_GeV_full"]
-    df["energy_GeV_high"] = 1.019 * df["energy_GeV_full"]
+    df["energy_GeV_low"]  = 0.9796 * df["energy_GeV_full"]
+    df["energy_GeV_high"] = 1.0204 * df["energy_GeV_full"]
 
     return df
 

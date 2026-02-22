@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from glob import glob
 import mplhep as hep
-
+from matplotlib.ticker import MultipleLocator
 # -----------------------
 # User Settings
 # -----------------------
@@ -56,30 +56,33 @@ def compute_data_error_band(full, low, high, avg, bins, hist_range):
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
     norm = counts / n_events
-    stat_err = np.sqrt(counts) / n_events
+    stat_err = np.sqrt(counts) / n_events  # Statistical error
 
-    c_low,  _ = np.histogram(low,  bins=bins, range=hist_range)
+    # Systematics
+    c_low, _  = np.histogram(low,  bins=bins, range=hist_range)
     c_high, _ = np.histogram(high, bins=bins, range=hist_range)
-    c_avg,  _ = np.histogram(avg,  bins=bins, range=hist_range)
+    c_avg, _  = np.histogram(avg,  bins=bins, range=hist_range)
 
     c_low  = c_low.astype(float)  / n_events
     c_high = c_high.astype(float) / n_events
     c_avg  = c_avg.astype(float)  / n_events
 
-    sys_low  = c_low  - norm
-    sys_high = c_high - norm
+    # Energy spread systematics
+    delta_low  = c_low  - norm
+    delta_high = c_high - norm
+    ytop_sys_es = np.maximum(delta_low, delta_high)
+    ybot_sys_es = np.maximum(-delta_low, -delta_high)
 
-    ytop_es = np.maximum(sys_high, sys_low)
-    ybot_es = np.maximum(-sys_high, -sys_low)
-
+    # Calibration systematic
     delta_calib = c_avg - norm
     calib_pos = np.maximum(delta_calib, 0)
     calib_neg = np.maximum(-delta_calib, 0)
 
-    ytop = np.sqrt(stat_err**2 + ytop_es**2 + calib_pos**2)
-    ybot = np.sqrt(stat_err**2 + ybot_es**2 + calib_neg**2)
+    # Total systematic band (quadrature sum)
+    ytop_sys = np.sqrt(ytop_sys_es**2 + calib_pos**2)
+    ybot_sys = np.sqrt(ybot_sys_es**2 + calib_neg**2)
 
-    return bin_centers, norm, ybot, ytop
+    return bin_centers, norm, stat_err, ybot_sys, ytop_sys
 
 def compute_sim_hist(sim_vals, bins, hist_range):
     sim_vals = sim_vals[~np.isnan(sim_vals)]
@@ -117,7 +120,6 @@ def plot_layer_energy_distributions(data_dfs, sim_df):
     axes = axes.flatten()
 
     for i, layer in enumerate(layers):
-        # --- Data arrays ---
         full = combine_layer_arrays(data_dfs, "full", layer)
         low  = combine_layer_arrays(data_dfs, "low",  layer)
         high = combine_layer_arrays(data_dfs, "high", layer)
@@ -130,11 +132,10 @@ def plot_layer_energy_distributions(data_dfs, sim_df):
 
         # --- Data ---
         if data_hist is not None:
-            bc, norm, ybot, ytop = data_hist
-            ax.scatter(
-                bc, norm,
-                color="tab:blue",
-                s=40,
+            bc, norm, stat_err, ybot, ytop = data_hist
+            ax.errorbar(
+                bc, norm, yerr=stat_err,
+                fmt='o', color="tab:blue", markersize=4, capsize=2,
                 label=f"Layer {layer} Data"
             )
             ax.fill_between(
@@ -146,35 +147,22 @@ def plot_layer_energy_distributions(data_dfs, sim_df):
         # --- Simulation ---
         if sim_hist is not None:
             bc_s, norm_s, err_s = sim_hist
-            ax.scatter(
-                bc_s, norm_s,
-                color="tab:orange",
-                s=40,
+            ax.errorbar(
+                bc_s, norm_s, yerr=err_s,
+                fmt='o', color="tab:orange", markersize=4, capsize=2,
                 label=f"Layer {layer} Sim"
-            )
-            ax.fill_between(
-                bc_s, norm_s - err_s, norm_s + err_s,
-                color="tab:orange",
-                alpha=0.3
             )
 
         ax.set_ylim(0, 0.2)
-        ax.legend(fontsize=28)
+        ax.legend(fontsize=20)
 
-        # Axis labels exactly as before
         if i % ncols == 0:
-            ax.set_ylabel("Norm. Counts", fontsize=30)
+            ax.set_ylabel("Norm. Counts", fontsize=20)
         if layer >= layers[-5]:
-            ax.set_xlabel("Energy [GeV]", fontsize=30)
+            ax.set_xlabel("Energy [GeV]", fontsize=20)
 
-    # Hide unused pads
     for j in range(i + 1, len(axes)):
         axes[j].axis("off")
-
-    hep.style.use("CMS")
-    plt.rcParams['figure.facecolor'] = 'white'
-    plt.rcParams['savefig.facecolor'] = 'white'
-    plt.rcParams['savefig.bbox'] = 'tight'
 
     plt.tight_layout(pad=0.0)
     plt.subplots_adjust(wspace=0, hspace=0)
@@ -183,9 +171,8 @@ def plot_layer_energy_distributions(data_dfs, sim_df):
     plt.savefig("plots/layer_energy.pdf", bbox_inches="tight")
     plt.show()
 
-
 # -----------------------
-# Layer energy summary
+# Layer energy summary with full systematic bands
 # -----------------------
 def plot_layer_energy_summary(data_dfs, sim_df):
     layers = sorted(
@@ -194,11 +181,13 @@ def plot_layer_energy_summary(data_dfs, sim_df):
         if c.startswith("full_")
     )
 
-    data_means, data_me_lo, data_me_hi = [], [], []
-    sim_means,  sim_me_err             = [], []
+    data_means, data_me_stat_lo, data_me_stat_hi = [], [], []
+    data_me_sys_lo, data_me_sys_hi = [], []
+    sim_means, sim_me_err = [], []
 
-    data_stds, data_sd_lo, data_sd_hi = [], [], []
-    sim_stds,  sim_sd_err             = [], []
+    data_stds, data_sd_stat_lo, data_sd_stat_hi = [], [], []
+    data_sd_sys_lo, data_sd_sys_hi = [], []
+    sim_stds, sim_sd_err = [], []
 
     for layer in layers:
         full = combine_layer_arrays(data_dfs, "full", layer)
@@ -217,13 +206,22 @@ def plot_layer_energy_summary(data_dfs, sim_df):
         # ---- Mean energy ----
         mean = np.mean(full)
         stat = np.std(full) / np.sqrt(len(full))
-
         mean_lo = np.mean(low)  if len(low)  else mean
         mean_hi = np.mean(high) if len(high) else mean
+        mean_avg = np.mean(avg) if len(avg) else mean
 
         data_means.append(mean)
-        data_me_lo.append(np.sqrt(stat**2 + (mean - mean_lo)**2))
-        data_me_hi.append(np.sqrt(stat**2 + (mean_hi - mean)**2))
+        data_me_stat_lo.append(stat)
+        data_me_stat_hi.append(stat)
+
+        # Total systematic = quadrature of low/high spread + avg calibration
+        delta_low  = mean - mean_lo
+        delta_high = mean_hi - mean
+        delta_cal  = mean_avg - mean
+        ytop_sys = np.sqrt(max(delta_low, delta_high, 0)**2 + max(delta_cal, 0)**2)
+        ybot_sys = np.sqrt(max(-delta_low, -delta_high, 0)**2 + max(-delta_cal, 0)**2)
+        data_me_sys_lo.append(ybot_sys)
+        data_me_sys_hi.append(ytop_sys)
 
         sim_means.append(np.mean(sim))
         sim_me_err.append(np.std(sim) / np.sqrt(len(sim)))
@@ -231,13 +229,21 @@ def plot_layer_energy_summary(data_dfs, sim_df):
         # ---- Energy spread (std dev) ----
         std  = np.std(full)
         stat = std / np.sqrt(2 * len(full))
-
-        std_lo = np.std(low)  if len(low)  > 1 else std
-        std_hi = np.std(high) if len(high) > 1 else std
+        std_lo  = np.std(low)  if len(low)  > 1 else std
+        std_hi  = np.std(high) if len(high) > 1 else std
+        std_avg = np.std(avg)  if len(avg) > 1 else std
 
         data_stds.append(std)
-        data_sd_lo.append(np.sqrt(stat**2 + (std - std_lo)**2))
-        data_sd_hi.append(np.sqrt(stat**2 + (std_hi - std)**2))
+        data_sd_stat_lo.append(stat)
+        data_sd_stat_hi.append(stat)
+
+        delta_low  = std - std_lo
+        delta_high = std_hi - std
+        delta_cal  = std_avg - std
+        ytop_sys = np.sqrt(max(delta_low, delta_high, 0)**2 + max(delta_cal, 0)**2)
+        ybot_sys = np.sqrt(max(-delta_low, -delta_high, 0)**2 + max(-delta_cal, 0)**2)
+        data_sd_sys_lo.append(ybot_sys)
+        data_sd_sys_hi.append(ytop_sys)
 
         sim_stds.append(np.std(sim))
         sim_sd_err.append(sim_stds[-1] / np.sqrt(2 * len(sim)))
@@ -247,70 +253,46 @@ def plot_layer_energy_summary(data_dfs, sim_df):
     fig, ax = plt.subplots(1, 2, figsize=(16, 8), sharex=True)
 
     # ---- Mean energy ----
-    ax[0].scatter(layers, data_means, color="tab:blue", s=40, label="Data")
-    ax[0].fill_between(
-        layers,
-        np.array(data_means) - np.array(data_me_lo),
-        np.array(data_means) + np.array(data_me_hi),
-        color="tab:blue",
-        alpha=0.3
-    )
-
-    ax[0].scatter(layers, sim_means, color="tab:orange", s=40, label="Sim")
-    ax[0].fill_between(
-        layers,
-        np.array(sim_means) - np.array(sim_me_err),
-        np.array(sim_means) + np.array(sim_me_err),
-        color="tab:orange",
-        alpha=0.3
-    )
-
+    ax[0].errorbar(layers, data_means,
+                   yerr=[data_me_stat_lo, data_me_stat_hi],
+                   fmt='o', color="tab:blue", markersize=6, label="Data")
+    ax[0].fill_between(layers,
+                       np.array(data_means) - np.array(data_me_sys_lo),
+                       np.array(data_means) + np.array(data_me_sys_hi),
+                       color="tab:blue", alpha=0.3)
+    ax[0].errorbar(layers, sim_means, yerr=sim_me_err,
+                   fmt='o', color="tab:orange", markersize=6, label="Sim")
     ax[0].set_ylabel("Mean Energy [GeV]", fontsize=30)
     ax[0].legend(fontsize=30)
 
     # ---- Energy spread ----
-    ax[1].scatter(layers, data_stds, color="tab:blue", s=40, label="Data")
-    ax[1].fill_between(
-        layers,
-        np.array(data_stds) - np.array(data_sd_lo),
-        np.array(data_stds) + np.array(data_sd_hi),
-        color="tab:blue",
-        alpha=0.3
-    )
-
-    ax[1].scatter(layers, sim_stds, color="tab:orange", s=40, label="Sim")
-    ax[1].fill_between(
-        layers,
-        np.array(sim_stds) - np.array(sim_sd_err),
-        np.array(sim_stds) + np.array(sim_sd_err),
-        color="tab:orange",
-        alpha=0.3
-    )
-
+    ax[1].errorbar(layers, data_stds,
+                   yerr=[data_sd_stat_lo, data_sd_stat_hi],
+                   fmt='o', color="tab:blue", markersize=6, label="Data")
+    ax[1].fill_between(layers,
+                       np.array(data_stds) - np.array(data_sd_sys_lo),
+                       np.array(data_stds) + np.array(data_sd_sys_hi),
+                       color="tab:blue", alpha=0.3)
+    ax[1].errorbar(layers, sim_stds, yerr=sim_sd_err,
+                   fmt='o', color="tab:orange", markersize=6, label="Sim")
     ax[1].set_ylabel("Energy Spread [GeV]", fontsize=30)
     ax[1].legend(fontsize=30)
 
     for a in ax:
         a.set_xlabel("Layer", fontsize=30)
         a.tick_params(labelsize=20)
-
-    hep.style.use("CMS")
-    plt.rcParams['figure.facecolor'] = 'white'
-    plt.rcParams['savefig.facecolor'] = 'white'
-    plt.rcParams['savefig.bbox'] = 'tight'
-
-    plt.tight_layout(pad=0.3)
+        a.xaxis.set_major_locator(MultipleLocator(1))
+    plt.tight_layout()
+    os.makedirs("plots", exist_ok=True)
     plt.savefig("plots/layer_energy_summary.pdf", bbox_inches="tight")
     plt.show()
-
 
 # -----------------------
 # Run
 # -----------------------
 configure_plotting()
-
 data_dfs = load_data_layer_energy(data_base_path)
 sim_df   = pd.read_pickle(sim_path)
 
-plot_layer_energy_distributions(data_dfs, sim_df)
+#plot_layer_energy_distributions(data_dfs, sim_df)
 plot_layer_energy_summary(data_dfs, sim_df)

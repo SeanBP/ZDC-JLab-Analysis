@@ -36,13 +36,12 @@ def combine_orient_data(df_list):
                     vals.extend(df[key].values)
             arr = np.array(vals)
             if col == "phi":
-                # Map phi to [0, 2*pi)
                 arr = np.mod(arr, 2*np.pi)
             data[key] = arr
     return data
 
 def compute_error_band(values, low, high, avg, bins, range_):
-    """Compute normalized histogram counts and error bands from full/low/high/avg arrays."""
+    """Compute normalized histogram counts and systematic error bands from full/low/high/avg arrays."""
     # Filter NaNs
     mask = ~(np.isnan(values) | np.isnan(low) | np.isnan(high) | np.isnan(avg))
     values = values[mask]
@@ -52,11 +51,11 @@ def compute_error_band(values, low, high, avg, bins, range_):
 
     total_events = len(values)
     if total_events == 0:
-        return np.array([]), np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([]), np.array([])
 
     counts, bin_edges = np.histogram(values, bins=bins, range=range_)
     norm_counts = counts / total_events
-    stat_err = np.sqrt(counts) / total_events
+    stat_err = np.sqrt(counts) / total_events  # statistical error
 
     counts_low, _  = np.histogram(low, bins=bins, range=range_)
     counts_high, _ = np.histogram(high, bins=bins, range=range_)
@@ -66,14 +65,14 @@ def compute_error_band(values, low, high, avg, bins, range_):
     counts_high = counts_high / total_events
     counts_avg  = counts_avg / total_events
 
-    # Max deviation for error band
+    # Systematic deviations only
     ytop = np.sqrt(np.maximum(counts_high - norm_counts, counts_low - norm_counts)**2 +
-                   (counts_avg - norm_counts)**2 + stat_err**2)
+                   (counts_avg - norm_counts)**2)
     ybot = np.sqrt(np.maximum(norm_counts - counts_high, norm_counts - counts_low)**2 +
-                   (norm_counts - counts_avg)**2 + stat_err**2)
+                   (norm_counts - counts_avg)**2)
 
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    return bin_centers, norm_counts, ybot, ytop
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    return bin_centers, norm_counts, stat_err, ybot, ytop
 
 def plot_theta_phi_distributions(orient_data, orient_sim, bins_theta=50, bins_phi=50):
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
@@ -85,7 +84,7 @@ def plot_theta_phi_distributions(orient_data, orient_sim, bins_theta=50, bins_ph
         bin_range = (0, 0.5) if coord == "theta" else (0, 2*np.pi)
 
         # --- Data ---
-        bin_centers, norm_counts, ybot, ytop = compute_error_band(
+        bin_centers, norm_counts, stat_err, ybot_sys, ytop_sys = compute_error_band(
             orient_data[f"{coord}_full"],
             orient_data[f"{coord}_low"],
             orient_data[f"{coord}_high"],
@@ -96,9 +95,10 @@ def plot_theta_phi_distributions(orient_data, orient_sim, bins_theta=50, bins_ph
         if len(norm_counts) > 0:
             max_idx = np.argmax(norm_counts)
             max_bin = bin_centers[max_idx]
-            legend_label = f"Data (max @ {max_bin:.1f} rad)"
-            axes[i].scatter(bin_centers, norm_counts, color=colors["data"], s=20, label=legend_label)
-            axes[i].fill_between(bin_centers, norm_counts - ybot, norm_counts + ytop,
+            legend_label = f"Data (max @ {max_bin:.2f} rad)"
+            axes[i].errorbar(bin_centers, norm_counts, yerr=stat_err,
+                             fmt='o', color=colors["data"], markersize=4, capsize=2, label=legend_label)
+            axes[i].fill_between(bin_centers, norm_counts - ybot_sys, norm_counts + ytop_sys,
                                  color=colors["data"], alpha=0.3)
 
         # --- Simulation ---
@@ -110,19 +110,18 @@ def plot_theta_phi_distributions(orient_data, orient_sim, bins_theta=50, bins_ph
         if sim_evts > 0:
             counts_sim, bin_edges_sim = np.histogram(sim_vals, bins=bins_dict[coord], range=bin_range)
             norm_counts_sim = counts_sim / sim_evts
-            errors_sim = np.sqrt(counts_sim) / sim_evts
-            bin_centers_sim = (bin_edges_sim[:-1] + bin_edges_sim[1:]) / 2
+            stat_err_sim = np.sqrt(counts_sim) / sim_evts
+            bin_centers_sim = 0.5 * (bin_edges_sim[:-1] + bin_edges_sim[1:])
             max_idx_sim = np.argmax(norm_counts_sim)
             max_bin_sim = bin_centers_sim[max_idx_sim]
-            legend_label_sim = f"Sim (max @ {max_bin_sim:.1f} rad)"
-            axes[i].scatter(bin_centers_sim, norm_counts_sim, color=colors["sim"], s=20, label=legend_label_sim)
-            axes[i].fill_between(bin_centers_sim, norm_counts_sim - errors_sim, norm_counts_sim + errors_sim,
-                                 color=colors["sim"], alpha=0.3)
+            legend_label_sim = f"Sim (max @ {max_bin_sim:.2f} rad)"
+            axes[i].errorbar(bin_centers_sim, norm_counts_sim, yerr=stat_err_sim,
+                             fmt='o', color=colors["sim"], markersize=4, capsize=2, label=legend_label_sim)
 
-        axes[i].set_xlabel(f"{coord.capitalize()} [radians]", fontsize=30)
-        axes[i].set_ylabel("Norm. counts", fontsize=30)
+        axes[i].set_xlabel(f"{coord.capitalize()} [radians]", fontsize=20)
+        axes[i].set_ylabel("Norm. counts", fontsize=20)
         axes[i].set_ylim(0, 0.04)
-        axes[i].legend(fontsize=20, loc="upper right")
+        axes[i].legend(fontsize=16, loc="upper right")
 
     plt.tight_layout()
     os.makedirs("plots", exist_ok=True)

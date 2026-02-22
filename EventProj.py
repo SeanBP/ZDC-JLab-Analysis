@@ -13,7 +13,7 @@ from scipy.optimize import curve_fit
 # User Settings
 # -----------------------
 data_base_path = "/media/miguel/Expansion/ZDC_JLab_test_data"
-sim_path       = "/media/miguel/Expansion/ZDC_JLab_test_data/Sim/e+5.3GeV_DF_1_event_summary.pkl"  # simulation event summary
+sim_path       = "/media/miguel/Expansion/ZDC_JLab_test_data/Sim/e+5.3GeV_DF_1_event_summary.pkl"
 bins = 300
 range_x = (-50, 50)
 range_y = (-50, 50)
@@ -60,11 +60,10 @@ def compute_error_band(values, low, high, avg, bins, hist_range):
     mask = ~(np.isnan(values) | np.isnan(low) | np.isnan(high) | np.isnan(avg))
     values, low, high, avg = values[mask], low[mask], high[mask], avg[mask]
 
-    counts, bin_edges = np.histogram(values, bins=bins, range=hist_range)
+    counts_raw, bin_edges = np.histogram(values, bins=bins, range=hist_range)
     total = len(values)
-    counts = counts / total
-
-    stat_err = np.sqrt(counts * total) / total
+    counts = counts_raw / total
+    stat_err = np.sqrt(counts_raw) / total  # Statistical error as error bars
 
     counts_low, _  = np.histogram(low, bins=bins, range=hist_range)
     counts_high, _ = np.histogram(high, bins=bins, range=hist_range)
@@ -74,11 +73,12 @@ def compute_error_band(values, low, high, avg, bins, hist_range):
     counts_high = counts_high / total
     counts_avg  = counts_avg / total
 
-    ytop = np.sqrt(np.maximum(counts_high - counts, counts_low - counts)**2 + (counts_avg - counts)**2 + stat_err**2)
-    ybot = np.sqrt(np.maximum(counts - counts_high, counts - counts_low)**2 + (counts - counts_avg)**2 + stat_err**2)
+    # Systematic uncertainty bands only (exclude stat_err from band)
+    ytop = np.sqrt(np.maximum(counts_high - counts, counts_low - counts)**2 + (counts_avg - counts)**2)
+    ybot = np.sqrt(np.maximum(counts - counts_high, counts - counts_low)**2 + (counts - counts_avg)**2)
 
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    return bin_centers, counts, ybot, ytop
+    return bin_centers, counts, stat_err, ybot, ytop
 
 # -----------------------
 # Main plotting routine
@@ -90,7 +90,7 @@ def plot_proj_1d_event_summary(data_proj, sim_df, bins=bins, range_x=range_x, ra
 
     for i, coord in enumerate(coords):
         # ---- Data ----
-        bc, counts, ybot, ytop = compute_error_band(
+        bc, counts, stat_err, ybot, ytop = compute_error_band(
             data_proj[coord],
             data_proj[f"{coord}_low"],
             data_proj[f"{coord}_high"],
@@ -99,28 +99,30 @@ def plot_proj_1d_event_summary(data_proj, sim_df, bins=bins, range_x=range_x, ra
             hist_range=(range_x if coord=="x" else range_y)
         )
 
-        # Fit Gaussian to data
+        # Gaussian fit for data
         try:
-            p0 = [counts.max(), 0, 15]  # initial guess
+            p0 = [counts.max(), 0, 15] if coord=="x" else [counts.max(), 0, 15]
             popt_d, _ = curve_fit(gaussian, bc, counts, p0=p0)
             A_d, mu_d, sigma_d = popt_d
-            # Corrected sigma (quadrature subtraction if needed)
             if coord == "x":
-                sigma_corr = np.sqrt(max(0, sigma_d**2 - (10.6/np.sqrt(12))**2))
+                sigma_corr = np.sqrt(max(sigma_d**2 - 3.1**2, 0))
             else:
-                sigma_corr = np.sqrt(max(0, sigma_d**2 - 1.44**2))
+                sigma_corr = np.sqrt(max(sigma_d**2 - 1.44**2, 0))
         except RuntimeError:
             A_d, mu_d, sigma_corr = 0, 0, 0
 
-        axs[i].scatter(bc, counts, color=colors["data"], s=20, label=f"Data μ={mu_d:.1f} mm, σ={sigma_corr:.1f} mm")
+        # Plot data
+        axs[i].errorbar(bc, counts, yerr=stat_err, fmt='o', color=colors["data"], markersize=4, capsize=2,
+                        label=f"Data μ={mu_d:.1f} mm, σ={sigma_corr:.1f} mm")
+        print(f"{coord}_proj Data μ={mu_d:.1f} mm, σ={sigma_corr:.3f} mm")
         axs[i].fill_between(bc, counts - ybot, counts + ytop, color=colors["data"], alpha=0.3)
         axs[i].plot(bc, gaussian(bc, A_d, mu_d, sigma_d), '--', color=colors["data"])
 
         # ---- Simulation ----
         sim_vals = sim_df[f"{coord}_proj"].dropna().values
-        counts_s, bin_edges = np.histogram(sim_vals, bins=bins, range=(range_x if coord=="x" else range_y))
-        counts_s = counts_s / len(sim_vals)
-        errors_s = np.sqrt(counts_s * len(sim_vals)) / len(sim_vals)
+        counts_s_raw, bin_edges = np.histogram(sim_vals, bins=bins, range=(range_x if coord=="x" else range_y))
+        counts_s = counts_s_raw / len(sim_vals)
+        stat_err_s = np.sqrt(counts_s_raw) / len(sim_vals)
         bc_s = (bin_edges[:-1] + bin_edges[1:]) / 2
 
         try:
@@ -130,8 +132,9 @@ def plot_proj_1d_event_summary(data_proj, sim_df, bins=bins, range_x=range_x, ra
         except RuntimeError:
             A_s, mu_s, sigma_s = 0, 0, 0
 
-        axs[i].scatter(bc_s, counts_s, color=colors["sim"], s=20, label=f"Sim μ={mu_s:.1f} mm, σ={sigma_s:.1f} mm")
-        axs[i].fill_between(bc_s, counts_s - errors_s, counts_s + errors_s, color=colors["sim"], alpha=0.3)
+        axs[i].errorbar(bc_s, counts_s, yerr=stat_err_s, fmt='o', color=colors["sim"], markersize=4, capsize=2,
+                        label=f"Sim μ={mu_s:.1f} mm, σ={sigma_s:.1f} mm")
+        print(f"Sim μ={mu_s:.1f} mm, σ={sigma_s:.3f} mm")
         axs[i].plot(bc_s, gaussian(bc_s, A_s, mu_s, sigma_s), '--', color=colors["sim"])
 
         # Formatting
@@ -139,11 +142,11 @@ def plot_proj_1d_event_summary(data_proj, sim_df, bins=bins, range_x=range_x, ra
         axs[i].set_xlim(-30, 30)
         axs[i].set_xlabel(f"Projected {coord.upper()} Position [mm]")
         axs[i].set_ylabel("Norm. Counts")
-        axs[i].legend(loc="upper right", fontsize=20)
+        axs[i].legend(loc="upper right", fontsize=16)
 
     plt.tight_layout()
     os.makedirs("plots", exist_ok=True)
-    plt.savefig("plots/position_res_event_summary.pdf", bbox_inches="tight")
+    plt.savefig("plots/position_res.pdf", bbox_inches="tight")
     plt.show()
 
 # -----------------------
