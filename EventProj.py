@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')  # Fix libGL errors on headless servers
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from glob import glob
 import mplhep as hep
@@ -28,12 +28,12 @@ def configure_plotting():
     hep.style.use(hep.style.CMS)
 
 def gaussian(x, A, mu, sigma):
-    return A * np.exp(-(x - mu)**2 / (2*sigma**2))
+    return A * np.exp(-(x - mu)**2 / (2 * sigma**2))
 
 def combine_proj_data(df_list):
-    """Combine projected x/y from multiple event_summary dfs"""
     x_full, x_low, x_high, x_avg = [], [], [], []
     y_full, y_low, y_high, y_avg = [], [], [], []
+
     for df in df_list:
         x_full.extend(df["x_proj_full"].values)
         x_low.extend(df["x_proj_low"].values)
@@ -62,8 +62,9 @@ def compute_error_band(values, low, high, avg, bins, hist_range):
 
     counts_raw, bin_edges = np.histogram(values, bins=bins, range=hist_range)
     total = len(values)
+
     counts = counts_raw / total
-    stat_err = np.sqrt(counts_raw) / total  # Statistical error as error bars
+    stat_err = np.sqrt(counts_raw) / total
 
     counts_low, _  = np.histogram(low, bins=bins, range=hist_range)
     counts_high, _ = np.histogram(high, bins=bins, range=hist_range)
@@ -73,9 +74,10 @@ def compute_error_band(values, low, high, avg, bins, hist_range):
     counts_high = counts_high / total
     counts_avg  = counts_avg / total
 
-    # Systematic uncertainty bands only (exclude stat_err from band)
-    ytop = np.sqrt(np.maximum(counts_high - counts, counts_low - counts)**2 + (counts_avg - counts)**2)
-    ybot = np.sqrt(np.maximum(counts - counts_high, counts - counts_low)**2 + (counts - counts_avg)**2)
+    ytop = np.sqrt(np.maximum(counts_high - counts, counts_low - counts)**2 +
+                   (counts_avg - counts)**2)
+    ybot = np.sqrt(np.maximum(counts - counts_high, counts - counts_low)**2 +
+                   (counts - counts_avg)**2)
 
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     return bin_centers, counts, stat_err, ybot, ytop
@@ -83,12 +85,19 @@ def compute_error_band(values, low, high, avg, bins, hist_range):
 # -----------------------
 # Main plotting routine
 # -----------------------
-def plot_proj_1d_event_summary(data_proj, sim_df, bins=bins, range_x=range_x, range_y=range_y):
+def plot_proj_1d_event_summary(data_proj, sim_df,
+                               bins=bins,
+                               range_x=range_x,
+                               range_y=range_y):
+
     fig, axs = plt.subplots(1, 2, figsize=(15, 8))
     coords = ["x", "y"]
     colors = {"data": "tab:blue", "sim": "tab:orange"}
 
     for i, coord in enumerate(coords):
+
+        hist_range = range_x if coord == "x" else range_y
+
         # ---- Data ----
         bc, counts, stat_err, ybot, ytop = compute_error_band(
             data_proj[coord],
@@ -96,53 +105,94 @@ def plot_proj_1d_event_summary(data_proj, sim_df, bins=bins, range_x=range_x, ra
             data_proj[f"{coord}_high"],
             data_proj[f"{coord}_avg"],
             bins=bins,
-            hist_range=(range_x if coord=="x" else range_y)
+            hist_range=hist_range
         )
 
-        # Gaussian fit for data
         try:
-            p0 = [counts.max(), 0, 15] if coord=="x" else [counts.max(), 0, 15]
-            popt_d, _ = curve_fit(gaussian, bc, counts, p0=p0)
+            p0 = [counts.max(), 0, 15]
+            popt_d, pcov_d = curve_fit(gaussian, bc, counts, p0=p0)
             A_d, mu_d, sigma_d = popt_d
-            if coord == "x":
-                sigma_corr = np.sqrt(max(sigma_d**2 - 3.1**2, 0))
+            sigma_d_err = np.sqrt(np.diag(pcov_d))[2]
+
+            subtract = 3.1 if coord == "x" else 1.44
+            sigma_corr = np.sqrt(max(sigma_d**2 - subtract**2, 0))
+
+            if sigma_corr > 0:
+                sigma_corr_err = abs(sigma_d / sigma_corr) * sigma_d_err
             else:
-                sigma_corr = np.sqrt(max(sigma_d**2 - 1.44**2, 0))
+                sigma_corr_err = 0.0
+
         except RuntimeError:
-            A_d, mu_d, sigma_corr = 0, 0, 0
+            A_d, mu_d, sigma_d = 0, 0, 0
+            sigma_d_err = 0
+            sigma_corr = 0
+            sigma_corr_err = 0
+
+        # Print sigmas and errors
+        print(f"{coord}_proj Data:")
+        print(f"  σ_uncorr = {sigma_d:.3f} ± {sigma_d_err:.3f} mm")
+        print(f"  σ_corr   = {sigma_corr:.3f} ± {sigma_corr_err:.3f} mm")
 
         # Plot data
-        axs[i].errorbar(bc, counts, yerr=stat_err, fmt='o', color=colors["data"], markersize=4, capsize=2,
-                        label=f"Data μ={mu_d:.1f} mm, σ={sigma_corr:.1f} mm")
-        print(f"{coord}_proj Data μ={mu_d:.1f} mm, σ={sigma_corr:.3f} mm")
-        axs[i].fill_between(bc, counts - ybot, counts + ytop, color=colors["data"], alpha=0.3)
-        axs[i].plot(bc, gaussian(bc, A_d, mu_d, sigma_d), '--', color=colors["data"])
+        axs[i].errorbar(
+            bc, counts, yerr=stat_err, fmt='o',
+            color=colors["data"], markersize=4, capsize=2,
+            label=(
+                r"ZDC Prototype" "\n"
+                rf"$\sigma_{{\mathrm{{uncorr}}}}$ = {sigma_d:.1f} mm" "\n"
+                rf"$\sigma_{{\mathrm{{corr}}}}$ = {sigma_corr:.1f} mm"
+            )
+        )
+
+        axs[i].fill_between(
+            bc, counts - ybot, counts + ytop,
+            color=colors["data"], alpha=0.3
+        )
+
+        axs[i].plot(
+            bc, gaussian(bc, A_d, mu_d, sigma_d),
+            '--', color=colors["data"]
+        )
 
         # ---- Simulation ----
         sim_vals = sim_df[f"{coord}_proj"].dropna().values
-        counts_s_raw, bin_edges = np.histogram(sim_vals, bins=bins, range=(range_x if coord=="x" else range_y))
+
+        counts_s_raw, bin_edges = np.histogram(
+            sim_vals, bins=bins, range=hist_range
+        )
         counts_s = counts_s_raw / len(sim_vals)
         stat_err_s = np.sqrt(counts_s_raw) / len(sim_vals)
         bc_s = (bin_edges[:-1] + bin_edges[1:]) / 2
 
         try:
             p0 = [counts_s.max(), 0, 10]
-            popt_s, _ = curve_fit(gaussian, bc_s, counts_s, p0=p0)
+            popt_s, pcov_s = curve_fit(gaussian, bc_s, counts_s, p0=p0)
             A_s, mu_s, sigma_s = popt_s
+            sigma_s_err = np.sqrt(np.diag(pcov_s))[2]
         except RuntimeError:
             A_s, mu_s, sigma_s = 0, 0, 0
+            sigma_s_err = 0
 
-        axs[i].errorbar(bc_s, counts_s, yerr=stat_err_s, fmt='o', color=colors["sim"], markersize=4, capsize=2,
-                        label=f"Sim μ={mu_s:.1f} mm, σ={sigma_s:.1f} mm")
-        print(f"Sim μ={mu_s:.1f} mm, σ={sigma_s:.3f} mm")
-        axs[i].plot(bc_s, gaussian(bc_s, A_s, mu_s, sigma_s), '--', color=colors["sim"])
+        print(f"{coord}_proj Sim:")
+        print(f"  σ = {sigma_s:.3f} ± {sigma_s_err:.3f} mm")
+
+        axs[i].errorbar(
+            bc_s, counts_s, yerr=stat_err_s, fmt='o',
+            color=colors["sim"], markersize=4, capsize=2,
+            label=f"Sim σ = {sigma_s:.1f} mm"
+        )
+
+        axs[i].plot(
+            bc_s, gaussian(bc_s, A_s, mu_s, sigma_s),
+            '--', color=colors["sim"]
+        )
 
         # Formatting
-        axs[i].set_ylim(0, 0.08)
+        axs[i].set_ylim(0, 0.04)
         axs[i].set_xlim(-30, 30)
-        axs[i].set_xlabel(f"Projected {coord.upper()} Position [mm]")
-        axs[i].set_ylabel("Norm. Counts")
-        axs[i].legend(loc="upper right", fontsize=16)
+        axs[i].set_xlabel(f"Projected {coord.upper()} Position [mm]", fontsize=30)
+        axs[i].set_ylabel("Norm. Counts", fontsize=30)
+        axs[i].legend(loc="upper right", fontsize=23)
 
     plt.tight_layout()
     os.makedirs("plots", exist_ok=True)
@@ -152,7 +202,9 @@ def plot_proj_1d_event_summary(data_proj, sim_df, bins=bins, range_x=range_x, ra
 # -----------------------
 # Load data
 # -----------------------
-data_files = sorted(glob(os.path.join(data_base_path, "*-Beam", "*_event_summary.pkl")))
+data_files = sorted(
+    glob(os.path.join(data_base_path, "*-Beam", "*_event_summary.pkl"))
+)
 data_dfs = [pd.read_pickle(f) for f in data_files]
 data_proj = combine_proj_data(data_dfs)
 

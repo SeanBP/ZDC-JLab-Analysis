@@ -20,7 +20,7 @@ gev_MIP = 0.0012
 hit_threshold = 0.5 * gev_MIP
 
 # Event cuts
-EVENT_ENERGY_CUT = gev_MIP * 10
+EVENT_ENERGY_CUT = 1
 MIN_HITS = 10
 
 # -------------------------------------------------

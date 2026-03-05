@@ -153,16 +153,18 @@ def plot_layer_energy_distributions(data_dfs, sim_df):
                 label=f"Layer {layer} Sim"
             )
 
-        ax.set_ylim(0, 0.2)
-        ax.legend(fontsize=20)
+        ax.set_ylim(0, 0.18)
+
+        ax.legend(fontsize=30)
 
         if i % ncols == 0:
-            ax.set_ylabel("Norm. Counts", fontsize=20)
+            ax.set_ylabel("Norm. Counts", fontsize=30)
         if layer >= layers[-5]:
-            ax.set_xlabel("Energy [GeV]", fontsize=20)
+            ax.set_xlabel("Energy [GeV]", fontsize=30)
 
     for j in range(i + 1, len(axes)):
         axes[j].axis("off")
+    
 
     plt.tight_layout(pad=0.0)
     plt.subplots_adjust(wspace=0, hspace=0)
@@ -294,5 +296,5 @@ configure_plotting()
 data_dfs = load_data_layer_energy(data_base_path)
 sim_df   = pd.read_pickle(sim_path)
 
-#plot_layer_energy_distributions(data_dfs, sim_df)
+plot_layer_energy_distributions(data_dfs, sim_df)
 plot_layer_energy_summary(data_dfs, sim_df)

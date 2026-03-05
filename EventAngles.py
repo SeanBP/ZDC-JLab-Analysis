@@ -95,7 +95,7 @@ def plot_theta_phi_distributions(orient_data, orient_sim, bins_theta=50, bins_ph
         if len(norm_counts) > 0:
             max_idx = np.argmax(norm_counts)
             max_bin = bin_centers[max_idx]
-            legend_label = f"Data (max @ {max_bin:.2f} rad)"
+            legend_label = f"Data"
             axes[i].errorbar(bin_centers, norm_counts, yerr=stat_err,
                              fmt='o', color=colors["data"], markersize=4, capsize=2, label=legend_label)
             axes[i].fill_between(bin_centers, norm_counts - ybot_sys, norm_counts + ytop_sys,
@@ -114,18 +114,19 @@ def plot_theta_phi_distributions(orient_data, orient_sim, bins_theta=50, bins_ph
             bin_centers_sim = 0.5 * (bin_edges_sim[:-1] + bin_edges_sim[1:])
             max_idx_sim = np.argmax(norm_counts_sim)
             max_bin_sim = bin_centers_sim[max_idx_sim]
-            legend_label_sim = f"Sim (max @ {max_bin_sim:.2f} rad)"
+            legend_label_sim = f"Sim"
             axes[i].errorbar(bin_centers_sim, norm_counts_sim, yerr=stat_err_sim,
                              fmt='o', color=colors["sim"], markersize=4, capsize=2, label=legend_label_sim)
 
-        axes[i].set_xlabel(f"{coord.capitalize()} [radians]", fontsize=20)
-        axes[i].set_ylabel("Norm. counts", fontsize=20)
+        symbol = {"theta": r"$\theta$", "phi": r"$\phi$"}[coord]
+        axes[i].set_xlabel(f"{symbol} [radians]", fontsize=30)
+        axes[i].set_ylabel("Norm. counts", fontsize=30)
         axes[i].set_ylim(0, 0.04)
-        axes[i].legend(fontsize=16, loc="upper right")
+        axes[i].legend(fontsize=30, loc="upper right")
 
     plt.tight_layout()
     os.makedirs("plots", exist_ok=True)
-    plt.savefig("plots/cluster_angles.pdf")
+    plt.savefig("plots/angular_dist.pdf")
     plt.show()
 
 # -----------------------

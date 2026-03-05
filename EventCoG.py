@@ -13,7 +13,7 @@ from scipy.optimize import curve_fit
 data_base_path = "/media/miguel/Expansion/ZDC_JLab_test_data"
 sim_path       = "/media/miguel/Expansion/ZDC_JLab_test_data/Sim/e+5.3GeV_DF_1_event_summary.pkl"
 
-bins = 100
+bins = 300
 ranges = {
     "x": (-30, 30),
     "y": (-30, 30),
@@ -189,7 +189,7 @@ for ax, coord in zip(axs, ["x", "y", "z"]):
 
     ax.set_xlabel(f"{coord.upper()} Center of Gravity Position [mm]", fontsize=30)
     ax.set_ylabel("Norm. Counts", fontsize=30)
-    ax.set_ylim(0, 0.16)
+    ax.set_ylim(0, 0.055)
     ax.legend(fontsize=25, loc="upper right")
 
 plt.tight_layout()

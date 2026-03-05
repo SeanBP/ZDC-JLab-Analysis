@@ -13,8 +13,8 @@ from glob import glob
 data_base_path = "/media/miguel/Expansion/ZDC_JLab_test_data"
 sim_path       = "/media/miguel/Expansion/ZDC_JLab_test_data/Sim/e+5.3GeV_DF_1_event_summary.pkl"
 
-bins = 100
-rng = (3, 9)
+bins = 500
+rng = (0, 10)
 
 # -----------------------
 # Helper functions
@@ -49,14 +49,10 @@ def fit_and_plot_err_band(
     total = len(evt_energy)
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     counts = counts_raw / total
-
-    # -----------------------
-    # Statistical uncertainty (data)
-    # -----------------------
     stat_err = np.sqrt(counts_raw) / total
 
     # -----------------------
-    # Energy spread systematics
+    # Systematics
     # -----------------------
     counts_low_raw, _  = np.histogram(evt_energy_low,  bins=bins, range=rng)
     counts_high_raw, _ = np.histogram(evt_energy_high, bins=bins, range=rng)
@@ -73,9 +69,6 @@ def fit_and_plot_err_band(
     ybot_sys_es = np.maximum(-delta_low, -delta_high)
     ybot_sys_es[ybot_sys_es < 0] = 0.0
 
-    # -----------------------
-    # Calibration systematic (avg)
-    # -----------------------
     counts_avg_raw, _ = np.histogram(evt_energy_avg, bins=bins, range=rng)
     counts_avg = counts_avg_raw / total
     calib_delta = counts_avg - counts
@@ -83,9 +76,6 @@ def fit_and_plot_err_band(
     calib_pos = np.maximum(calib_delta, 0.0)
     calib_neg = np.maximum(-calib_delta, 0.0)
 
-    # -----------------------
-    # Total systematic band (NO stat included)
-    # -----------------------
     ytop_sys = np.sqrt(ytop_sys_es**2 + calib_pos**2)
     ybot_sys = np.sqrt(ybot_sys_es**2 + calib_neg**2)
 
@@ -93,34 +83,66 @@ def fit_and_plot_err_band(
     # Gaussian fit (data)
     # -----------------------
     sigma_fixed = 0.036
+
     try:
         A_guess = counts.max()
         mu_guess = np.mean(evt_energy)
         sigma_guess = np.std(evt_energy)
 
-        popt, _ = curve_fit(
+        popt, pcov = curve_fit(
             gaussian,
             bin_centers,
             counts,
             p0=[A_guess, mu_guess, sigma_guess],
         )
 
-        sigma_fit = popt[2]
-        mu_fit = popt[1]
+        A_fit, mu_fit, sigma_fit = popt
+        perr = np.sqrt(np.diag(pcov))
+        mu_err = perr[1]
+        sigma_err = perr[2]
+
         sigma_corr = np.sqrt(max(0.0, sigma_fit**2 - sigma_fixed**2))
-        fit_label = f"{label} (res={sigma_corr / mu_fit * 100:.1f}%)"
-        print(f"{label} (res={sigma_corr / mu_fit * 100:.3f}%)")
+
+        if sigma_corr > 0:
+            sigma_corr_err = abs(sigma_fit / sigma_corr) * sigma_err
+        else:
+            sigma_corr_err = 0.0
+
+        # --- Resolution (σ/μ)
+        res_uncorr = sigma_fit / mu_fit
+        res_uncorr_err = res_uncorr * np.sqrt(
+            (sigma_err / sigma_fit)**2 +
+            (mu_err / mu_fit)**2
+        )
+
+        res_corr = sigma_corr / mu_fit
+        res_corr_err = (
+            res_corr * np.sqrt(
+                (sigma_corr_err / sigma_corr)**2 +
+                (mu_err / mu_fit)**2
+            )
+            if sigma_corr > 0 else 0.0
+        )
+
+        print("Data:")
+        print(f"  Uncorrected resolution = {res_uncorr*100:.3f} ± {res_uncorr_err*100:.3f} %")
+        print(f"  Corrected resolution   = {res_corr*100:.3f} ± {res_corr_err*100:.3f} %")
+
+        # Legend EXACTLY as before, but now using σ/μ (uncorrected)
+        fit_label = f"{label} (res={res_uncorr*100:.1f}%)"
+
         plt.plot(
             bin_centers,
             gaussian(bin_centers, *popt),
             color=color,
             linestyle="--",
         )
+
     except Exception:
         fit_label = f"{label} (fit failed)"
 
     # -----------------------
-    # Simulation histogram
+    # Simulation
     # -----------------------
     sim_counts_raw, _ = np.histogram(evt_energy_sim, bins=bins, range=rng)
     sim_total = len(evt_energy_sim)
@@ -128,38 +150,47 @@ def fit_and_plot_err_band(
     sim_counts = sim_counts_raw / sim_total
     sim_stat_err = np.sqrt(sim_counts_raw) / sim_total
 
-    # -----------------------
-    # Gaussian fit (simulation)
-    # -----------------------
     try:
         A_guess_sim = sim_counts.max()
         mu_guess_sim = bin_centers[np.argmax(sim_counts)]
         sigma_guess_sim = np.std(evt_energy_sim[evt_energy_sim < rng[1]])
 
-        popt_sim, _ = curve_fit(
+        popt_sim, pcov_sim = curve_fit(
             gaussian,
             bin_centers,
             sim_counts,
             p0=[A_guess_sim, mu_guess_sim, sigma_guess_sim],
         )
 
-        sim_fit_label = (
-            f"{sim_label} (res={popt_sim[2] / popt_sim[1] * 100:.1f}%)"
+        A_sim, mu_sim, sigma_sim = popt_sim
+        perr_sim = np.sqrt(np.diag(pcov_sim))
+        mu_sim_err = perr_sim[1]
+        sigma_sim_err = perr_sim[2]
+
+        res_sim = sigma_sim / mu_sim
+        res_sim_err = res_sim * np.sqrt(
+            (sigma_sim_err / sigma_sim)**2 +
+            (mu_sim_err / mu_sim)**2
         )
-        print(f"{sim_label} (res={popt_sim[2] / popt_sim[1] * 100:.3f}%)")
+
+        print("Simulation:")
+        print(f"  Resolution = {res_sim*100:.3f} ± {res_sim_err*100:.3f} %")
+
+        sim_fit_label = f"{sim_label} (res={res_sim*100:.1f}%)"
+
         plt.plot(
             bin_centers,
             gaussian(bin_centers, *popt_sim),
             color=sim_color,
             linestyle="--",
         )
+
     except Exception:
         sim_fit_label = f"{sim_label} (fit failed)"
 
     # -----------------------
     # Plotting
     # -----------------------
-    # Data: stat error bars
     plt.errorbar(
         bin_centers,
         counts,
@@ -171,7 +202,6 @@ def fit_and_plot_err_band(
         label=fit_label,
     )
 
-    # Data: systematic error band
     plt.fill_between(
         bin_centers,
         counts - ybot_sys,
@@ -181,7 +211,6 @@ def fit_and_plot_err_band(
         linewidth=0,
     )
 
-    # Simulation: stat error bars
     plt.errorbar(
         bin_centers,
         sim_counts,
@@ -194,7 +223,7 @@ def fit_and_plot_err_band(
     )
 
 # -----------------------
-# Load all event energy summaries
+# Load data
 # -----------------------
 data_energies_full = []
 data_energies_low  = []
@@ -218,7 +247,7 @@ sim_df = pd.read_pickle(sim_path)
 evt_energy_sim = sim_df["event_energy"].values
 
 # -----------------------
-# Make the plot
+# Plot
 # -----------------------
 configure_plotting()
 plt.figure(figsize=(8, 8))
@@ -237,9 +266,12 @@ fit_and_plot_err_band(
     rng=rng,
 )
 
-plt.ylim(0, 0.08)
-plt.xlim(3, 9)
-plt.legend(fontsize=20, loc="upper right")
+plt.ylim(0, 0.02)
+plt.xlim(0, 10)
+
+legend = plt.legend(fontsize=20, loc="upper left")
+legend.set_title("ZDC Prototype")
+
 plt.xlabel("Energy [GeV]")
 plt.ylabel("Norm. Counts")
 
