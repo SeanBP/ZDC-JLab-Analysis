@@ -18,7 +18,7 @@ from Event_Functions import (
 input_dir = "/media/miguel/Expansion/ZDC_JLab_test_data/Sim/"
 sampling = 27.75
 gev_MIP = 0.0012
-hit_threshold = 0.5 * gev_MIP
+hit_threshold = 0.2 * gev_MIP
 
 # Event cuts
 EVENT_ENERGY_CUT = gev_MIP * 10

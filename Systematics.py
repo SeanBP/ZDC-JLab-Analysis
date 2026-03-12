@@ -163,12 +163,12 @@ def total_uncertainty(central, central_err, variations):
 # Energy Resolution
 # ============================================================
 
-E_std, E_std_err = 11.026, 0.017
+E_std, E_std_err = 11.199, 0.019
 
 E_vars = [
-    (11.025, 0.017),  # Low
-    (11.027, 0.017),  # High
-    (10.949, 0.016),  # Avg
+    (11.199, 0.02),  # Low
+    (11.2, 0.02),  # High
+    (11.102, 0.02),  # Avg
 ]
 
 E_pos, E_neg = total_uncertainty(E_std, E_std_err, E_vars)
@@ -179,27 +179,29 @@ E_pos, E_neg = total_uncertainty(E_std, E_std_err, E_vars)
 # ============================================================
 
 # ---- X ----
-X_std, X_std_err = 5.933, 0.017
+X_std, X_std_err = 6.095, 0.017
 
 X_vars = [
-    (5.933, 0.017),  # Low
-    (5.933, 0.017),  # High
-    (6.450, 0.022),  # Avg
+    (6.095, 0.017),  # Low
+    (6.095, 0.017),  # High
+    (6.59, 0.023),  # Avg
 ]
 
 X_pos, X_neg = total_uncertainty(X_std, X_std_err, X_vars)
 
 # ---- Y ----
-Y_std, Y_std_err = 5.933, 0.017
+Y_std, Y_std_err = 5.352, 0.022
 
 Y_vars = [
-    (5.485, 0.020),  # Low
-    (5.485, 0.020),  # High
-    (5.384, 0.021),  # Avg
+    (5.352, 0.022),  # Low
+    (5.352, 0.022),  # High
+    (5.238, 0.022),  # Avg
 ]
 
 Y_pos, Y_neg = total_uncertainty(Y_std, Y_std_err, Y_vars)
 
+def percent_diff(var, ref):
+    return 100.0 * (var - ref) / ref
 
 # ============================================================
 # Print Results
@@ -210,12 +212,26 @@ print(f"{E_std:.3f} %")
 print(f"  +{E_pos:.3f} %")
 print(f"  -{E_neg:.3f} %\n")
 
+print("  Percent differences:")
+for name, val, _ in E_vars:
+    print(f"    {name}: {percent_diff(val, E_std):+.3f} %")
+print()
+
 print("X position resolution:")
 print(f"{X_std:.3f} mm")
 print(f"  +{X_pos:.3f} mm")
 print(f"  -{X_neg:.3f} mm\n")
 
+print("  Percent differences:")
+for name, val, _ in X_vars:
+    print(f"    {name}: {percent_diff(val, X_std):+.3f} %")
+print()
+
 print("Y position resolution:")
 print(f"{Y_std:.3f} mm")
 print(f"  +{Y_pos:.3f} mm")
 print(f"  -{Y_neg:.3f} mm")
+
+print("  Percent differences:")
+for name, val, _ in Y_vars:
+    print(f"    {name}: {percent_diff(val, Y_std):+.3f} %")

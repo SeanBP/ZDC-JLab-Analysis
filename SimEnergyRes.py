@@ -150,10 +150,10 @@ plt.errorbar(
 
 # External data point with symmetric error (use larger of up/down)
 data_E = 5.3
-data_R = 11.026
+data_R = 11.199
 
-data_err_up = 0.017
-data_err_down = 0.079
+data_err_up = 0.019
+data_err_down = 0.099
 data_err_sym = max(data_err_up, data_err_down)
 
 plt.errorbar(

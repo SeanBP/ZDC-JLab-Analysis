@@ -188,7 +188,7 @@ def plot_proj_1d_event_summary(data_proj, sim_df,
         )
 
         # Formatting
-        axs[i].set_ylim(0, 0.04)
+        axs[i].set_ylim(0, 0.045)
         axs[i].set_xlim(-30, 30)
         axs[i].set_xlabel(f"Projected {coord.upper()} Position [mm]", fontsize=30)
         axs[i].set_ylabel("Norm. Counts", fontsize=30)

@@ -128,8 +128,8 @@ axs[0].errorbar(
 
 # External data point with symmetric error (use larger of up/down)
 data_E = 5.3
-data_X = 5.933
-X_err_up = 0.517
+data_X = 6.095
+X_err_up = 0.495
 X_err_down = 0.017
 X_err_sym = max(X_err_up, X_err_down)
 axs[0].errorbar(
@@ -151,7 +151,7 @@ if do_fit:
         E_fine,
         resolution_func(E_fine, A_x, B_x),
         'r--',
-        label=r"$\frac{{{:.1f}}}{{\sqrt{{E}}}} \oplus {:.2f}\ \mathrm{{mm}}$".format(A_x, B_x)
+        label=r"$\frac{{{:.1f}}}{{\sqrt{{E}}}} \oplus {:.1f}\ \mathrm{{mm}}$".format(A_x, B_x)
     )
 
 axs[0].set_xlabel("Electron Energy [GeV]")
@@ -171,9 +171,9 @@ axs[1].errorbar(
 )
 
 # External data point with symmetric error (use larger of up/down)
-data_Y = 5.933
-Y_err_up = 0.017
-Y_err_down = 0.839
+data_Y = 5.352
+Y_err_up = 0.022
+Y_err_down = 0.116
 Y_err_sym = max(Y_err_up, Y_err_down)
 axs[1].errorbar(
     [data_E],
@@ -194,7 +194,7 @@ if do_fit:
         E_fine,
         resolution_func(E_fine, A_y, B_y),
         'r--',
-        label=r"$\frac{{{:.1f}}}{{\sqrt{{E}}}} \oplus {:.2f}\ \mathrm{{mm}}$".format(A_y, B_y)
+        label=r"$\frac{{{:.1f}}}{{\sqrt{{E}}}} \oplus {:.1f}\ \mathrm{{mm}}$".format(A_y, B_y)
     )
 
 axs[1].set_xlabel("Electron Energy [GeV]")

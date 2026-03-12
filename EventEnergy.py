@@ -127,7 +127,7 @@ def fit_and_plot_err_band(
         print("Data:")
         print(f"  Uncorrected resolution = {res_uncorr*100:.3f} ± {res_uncorr_err*100:.3f} %")
         print(f"  Corrected resolution   = {res_corr*100:.3f} ± {res_corr_err*100:.3f} %")
-
+        print(f"  Mean = {mu_fit*1:.3f}")
         # Legend EXACTLY as before, but now using σ/μ (uncorrected)
         fit_label = f"{label} (res={res_uncorr*100:.1f}%)"
 
@@ -230,7 +230,7 @@ data_energies_low  = []
 data_energies_high = []
 data_energies_avg  = []
 
-beam_folders = sorted(glob(os.path.join(data_base_path, "*-Beam")))
+beam_folders = sorted(glob(os.path.join(data_base_path, "*1-Beam")))
 for folder_path in beam_folders:
     evt_files = sorted(glob(os.path.join(folder_path, "*_event_summary.pkl")))
     for f in evt_files:

@@ -17,7 +17,7 @@ from Event_Functions import (
 pkl_file = "/media/miguel/Expansion/ZDC_JLab_test_data/Sim/e+5.3GeV_DF_1.pkl"
 sampling = 27.75
 gev_MIP = 0.0012
-hit_threshold = 0.5 * gev_MIP
+hit_threshold = 0.2 * gev_MIP
 
 # Event cuts
 EVENT_ENERGY_CUT = 1
@@ -34,8 +34,8 @@ events_below_cut = 0
 # -------------------------------------------------
 def apply_sampling_fraction(df):
     df = df.copy()
-    df["energy_GeV"] = df["energy_GeV"] * sampling
     df.loc[df["energy_GeV"] < hit_threshold, "energy_GeV"] = 0.0
+    df["energy_GeV"] = df["energy_GeV"] * sampling
     return df
 
 # -------------------------------------------------

@@ -30,7 +30,7 @@ run_folders = [
 
 gev_MIP = 0.0012
 sampling = 27.75
-calibration = 1.5368
+calibration = 1.571
 hit_threshold = 0.5 * gev_MIP
 MIN_HITS = 10
 
@@ -39,7 +39,7 @@ energy_tags = ["full", "low", "high", "avg"]
 # -----------------------------
 # Event energy cut (GeV)
 # -----------------------------
-EVENT_ENERGY_CUT = gev_MIP * 10
+EVENT_ENERGY_CUT = 1
 
 # -------------------------------------------------
 # Global counters
@@ -53,12 +53,12 @@ events_below_cut = 0
 # -------------------------------------------------
 def add_energy_columns(df):
     df = df.copy()
+    for col in ["energy_MIP_full", "energy_MIP_avg"]:
+        df.loc[df[col] < 0.2, col] = 0.0
 
     df["energy_GeV_full"] = df["energy_MIP_full"] * gev_MIP * sampling * calibration
     df["energy_GeV_avg"]  = df["energy_MIP_avg"]  * gev_MIP * sampling * calibration
 
-    for col in ["energy_GeV_full", "energy_GeV_avg"]:
-        df.loc[df[col] < hit_threshold, col] = 0.0
 
     df["energy_GeV_low"]  = 0.9796 * df["energy_GeV_full"]
     df["energy_GeV_high"] = 1.0204 * df["energy_GeV_full"]
@@ -96,7 +96,7 @@ for run in run_folders:
         # ---------------------------------
         cog_full = compute_event_cog(df, "energy_GeV_full")
 
-        hit_mask = df["energy_GeV_full"] >= hit_threshold
+        hit_mask = df["energy_GeV_full"] > 0
         hit_mult = (
             df.loc[hit_mask]
             .groupby("event")
